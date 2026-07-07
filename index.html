@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>Room & Faculty Allocation Console</title>
+<meta name="description" content="Live, shared weekly schedule — view anywhere, edit by admins only.">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#FFFFFF">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Room Console">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg:#F6F7F9;
+    --surface:#FFFFFF;
+    --surface-soft:#F1F2F5;
+    --header-bg:#FFFFFF;
+    --ink:#14161B;
+    --ink-soft:#40444E;
+    --muted:#6B7280;
+    --muted-dim:#9AA0AC;
+    --border:rgba(15,23,42,.08);
+    --border-strong:rgba(15,23,42,.16);
+    --emerald:#059669;
+    --emerald-bright:#10B981;
+    --teal:#0D9488;
+    --sat-accent:#0284C7;   /* sky */
+    --sat-bg:rgba(2,132,199,.08);
+    --sun-accent:#9333EA;   /* violet */
+    --sun-bg:rgba(147,51,234,.08);
+    --warn:#B45309;
+    --warn-bg:rgba(180,83,9,.10);
+    --danger:#DC2626;
+    --danger-bg:rgba(220,38,38,.08);
+    --radius-lg:28px;
+    --radius:16px;
+    --radius-sm:10px;
+    --font-display:'Space Grotesk', sans-serif;
+    --font-sans:'Inter', system-ui, sans-serif;
+    --font-mono:'JetBrains Mono', ui-monospace, monospace;
+    --tap:46px;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  body{
+    margin:0; background:var(--bg); color:var(--ink-soft);
+    font-family:var(--font-sans); -webkit-font-smoothing:antialiased;
+  }
+  ::selection{ background:rgba(5,150,105,.18); color:#065F46; }
+  ::-webkit-scrollbar{width:6px;height:6px;}
+  ::-webkit-scrollbar-track{background:transparent;}
+  ::-webkit-scrollbar-thumb{background:rgba(107,114,128,.25);border-radius:4px;}
+
+  @keyframes pulse-ring{
+    0%{ box-shadow:0 0 0 0 rgba(5,150,105,.45); }
+    70%{ box-shadow:0 0 0 7px rgba(16,185,129,0); }
+    100%{ box-shadow:0 0 0 0 rgba(16,185,129,0); }
+  }
+  .pulse-dot{
+    display:inline-block; width:7px;height:7px;border-radius:50%;
+    background:var(--emerald); margin-right:8px; animation:pulse-ring 2s cubic-bezier(.215,.61,.355,1) infinite;
+  }
+
+  .wrap{max-width:1400px;margin:0 auto;padding:20px 28px 40px;
+    padding-left:max(20px, env(safe-area-inset-left)); padding-right:max(20px, env(safe-area-inset-right));}
+
+  /* ---------- compact status strip ---------- */
+  .status-strip{
+    display:flex; align-items:center; flex-wrap:wrap; gap:6px 14px;
+    padding:8px 4px; margin-bottom:12px; font-size:12.2px;
+  }
+  .status-item{
+    display:inline-flex; align-items:center; gap:6px; color:var(--ink-soft);
+    padding:5px 4px;
+  }
+  .status-item svg{flex:none;}
+  .status-item.live{color:var(--emerald);font-weight:600;}
+  .status-item.offline{color:var(--warn);font-weight:600;}
+  .status-item.admin{color:var(--ink);font-weight:600;}
+  .status-divider{width:1px;height:14px;background:var(--border-strong);}
+  .status-mini-btn{
+    border:none;background:var(--surface-soft);border:1px solid var(--border-strong);border-radius:7px;
+    padding:4px 10px;font-weight:700;font-size:10.8px;cursor:pointer;color:var(--ink);
+    font-family:var(--font-sans);
+  }
+  .status-mini-btn.accent{background:var(--emerald);color:#fff;border-color:var(--emerald);}
+  .status-mini-btn.plain{background:none;border:none;color:var(--muted);font-weight:600;padding:4px 6px;}
+
+  /* ---------- header ---------- */
+  .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;gap:14px;flex-wrap:wrap;
+    padding-bottom:18px; border-bottom:1px solid var(--border);}
+  .brand{display:flex;align-items:center;gap:12px;min-width:0;}
+  .brand-mark{
+    width:38px;height:38px;border-radius:11px;flex:none;
+    background:linear-gradient(135deg,var(--emerald),var(--teal));
+    display:flex;align-items:center;justify-content:center;
+    color:#07080A;font-family:var(--font-display);font-weight:700;font-size:15px;
+  }
+  .brand h1{font-size:16px;margin:0;font-weight:700;letter-spacing:.02em;color:var(--ink);
+    font-family:var(--font-display); text-transform:uppercase;}
+  .brand-badge{
+    display:inline-block; font-size:8.5px; font-family:var(--font-mono); font-weight:600;
+    background:var(--surface-soft); border:1px solid var(--border); color:var(--muted); padding:2px 6px; border-radius:5px;
+    margin-left:8px; letter-spacing:.03em; vertical-align:middle;
+  }
+  .brand p{margin:2px 0 0;font-size:11.5px;color:var(--muted-dim);}
+
+  .file-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+  input[type=file]{display:none;}
+  .btn{
+    font-family:var(--font-sans); font-size:12.8px;font-weight:600;
+    padding:0 16px; height:var(--tap); border-radius:11px;border:1px solid transparent;
+    cursor:pointer; transition:.15s ease; display:inline-flex; align-items:center; gap:7px;
+    white-space:nowrap;
+  }
+  .btn-primary{background:var(--ink);color:#fff;} .btn-primary:hover{background:#2B2E36;}
+  .btn-accent{background:linear-gradient(135deg,var(--emerald),var(--teal));color:#fff;font-weight:700;}
+  .btn-accent:hover{filter:brightness(1.06);}
+  .btn-ghost{background:var(--surface);color:var(--ink-soft);border-color:var(--border-strong);}
+  .btn-ghost:hover{border-color:var(--border-strong);background:var(--surface-soft);}
+  .btn-danger-outline{background:var(--danger-bg);color:var(--danger);border-color:rgba(220,38,38,.2);}
+  .btn-text{background:none;border:none;color:var(--muted);font-size:12px;font-weight:600;cursor:pointer;padding:8px 4px;font-family:var(--font-sans);}
+  .btn:disabled{opacity:.4;cursor:not-allowed;}
+
+  /* ---------- empty / dropzone ---------- */
+  .empty-state{margin-top:60px;text-align:center;}
+  .empty-icon{width:54px;height:54px;border-radius:16px;margin:0 auto 16px;background:var(--surface);border:1px solid var(--border);
+    display:flex;align-items:center;justify-content:center;color:var(--emerald);}
+  .empty-state h2{font-size:18px;margin:0 0 6px;font-weight:700;color:var(--ink);font-family:var(--font-display);}
+  .empty-state p{color:var(--muted);font-size:13px;margin:0 auto 20px;max-width:360px;line-height:1.6;}
+
+  .dropzone{margin-top:20px;border:1.5px dashed rgba(255,255,255,.18);border-radius:var(--radius-lg);
+    background:var(--surface);padding:56px 24px;text-align:center;transition:.15s ease;}
+  .dropzone.drag{background:#191E22;border-color:var(--emerald);}
+  .dropzone h2{font-size:19px;margin:16px 0 6px;font-weight:700;color:var(--ink);font-family:var(--font-display);}
+  .dropzone p{color:var(--muted);font-size:13px;margin:0 0 22px;line-height:1.6;}
+  .dz-icon{width:54px;height:54px;border-radius:16px;margin:0 auto;background:rgba(16,185,129,.1);
+    border:1px solid rgba(16,185,129,.2); display:flex;align-items:center;justify-content:center;color:var(--emerald);}
+  .dz-hint{font-size:11px;color:var(--muted-dim);margin-top:18px;font-family:var(--font-mono);}
+
+  /* ---------- stats ---------- */
+  .stats{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:18px;}
+  .stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;}
+  .stat .num{font-family:var(--font-mono);font-size:22px;font-weight:700;color:var(--ink);}
+  .stat .lbl{font-size:10px;color:var(--muted-dim);margin-top:3px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;font-family:var(--font-mono);}
+  .stat.warn .num{color:var(--warn);}
+
+  /* ---------- toolbar ---------- */
+  .toolbar{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:14px;
+    display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+  .search-box{flex:1 1 220px;position:relative;}
+  .search-box input{width:100%;height:var(--tap);padding:0 12px 0 38px;border:1px solid var(--border-strong);border-radius:11px;
+    font-family:var(--font-sans);font-size:13.5px;background:var(--surface-soft);color:var(--ink);}
+  .search-box input::placeholder{color:var(--muted-dim);}
+  .search-box input:focus{outline:none;border-color:var(--emerald);}
+  .search-box svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--muted-dim);}
+  select.filt{height:var(--tap);padding:0 10px;border:1px solid var(--border-strong);border-radius:11px;
+    font-family:var(--font-sans);font-size:12.6px;background:var(--surface-soft);color:var(--ink-soft);max-width:170px;}
+  select.filt:focus{outline:none;border-color:var(--emerald);}
+  .clear-link{font-size:12.2px;color:var(--danger);font-weight:600;cursor:pointer;background:none;border:none;padding:8px 6px;min-height:var(--tap);font-family:var(--font-sans);}
+  .filter-trigger{display:none;}
+  .active-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--emerald);margin-left:6px;}
+
+  /* ---------- session blocks (modern card grid, all screen sizes) ---------- */
+  .cards{display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:14px; align-items:start;}
+  .empty-cell{color:var(--muted-dim);font-style:italic;}
+  .footer-row{display:flex;justify-content:space-between;align-items:center;margin-top:14px;font-size:11.5px;color:var(--muted-dim);font-family:var(--font-mono);}
+  .hidden{display:none !important;}
+
+  .code{font-family:var(--font-mono);font-size:11px;color:var(--muted-dim);}
+  .chip{display:inline-block;padding:3px 10px;border-radius:20px;font-size:10.2px;font-weight:700;white-space:nowrap;
+    font-family:var(--font-mono); letter-spacing:.03em;}
+  .chip.sat{background:rgba(56,189,248,.15);color:var(--sat-accent);}
+  .chip.sun{background:rgba(192,132,252,.15);color:var(--sun-accent);}
+  .chip.warn{background:var(--warn-bg);color:var(--warn);}
+  .chip.ok{background:rgba(16,185,129,.12);color:var(--emerald);}
+  a.linkbtn{color:var(--emerald);font-weight:600;text-decoration:none;font-size:12px;display:inline-flex;align-items:center;gap:3px;}
+  a.linkbtn:hover{text-decoration:underline;}
+
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:16px;
+    position:relative;overflow:hidden;transition:border-color .15s ease, transform .15s ease;}
+  .card:hover{border-color:var(--border-strong); transform:translateY(-1px);}
+  .card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--border-strong);}
+  .card.day-sat::before{background:var(--sat-accent);} .card.day-sun::before{background:var(--sun-accent);}
+  .card-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px;}
+  .card-time{font-family:var(--font-mono);font-size:12px;color:var(--ink-soft);font-weight:600;}
+  .card-meta{font-size:11px;color:var(--muted-dim);margin-top:2px;font-family:var(--font-mono);}
+  .card-course{font-size:15px;font-weight:600;line-height:1.35;margin:7px 0 8px;color:var(--ink);font-family:var(--font-display);}
+  .card-code{font-family:var(--font-mono);font-size:10.5px;color:var(--muted-dim);margin-bottom:10px;}
+  .card-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--border);font-size:12.6px;}
+  .card-row .k{color:var(--muted-dim);flex:none;font-size:10px;text-transform:uppercase;letter-spacing:.05em;font-family:var(--font-mono);}
+  .card-row .v{text-align:right;font-weight:500;word-break:break-word;color:var(--ink-soft);}
+  .room-field{display:flex;align-items:center;gap:8px;flex:1;justify-content:flex-end;}
+  .room-field input{border:1px solid var(--border-strong);border-radius:8px;padding:7px 9px;font-size:13px;
+    font-family:var(--font-sans);text-align:right;width:100%;max-width:170px;background:var(--surface-soft);color:var(--ink);}
+  .room-field input:focus{outline:none;border-color:var(--emerald);}
+  .card-actions{display:flex;gap:8px;margin-top:11px;}
+  .card-actions a.linkbtn{flex:1;justify-content:center;background:rgba(16,185,129,.1);padding:9px 0;border-radius:9px;font-size:12.2px;}
+  .expand-btn{flex:1;justify-content:center;background:var(--surface-soft);color:var(--muted);border:1px solid var(--border);
+    border-radius:9px;padding:9px 0;font-size:12.2px;font-weight:600;cursor:pointer;font-family:var(--font-sans);}
+  .card-extra{display:none;margin-top:4px;} .card-extra.open{display:block;}
+
+  /* ---------- filter drawer ---------- */
+  .drawer-backdrop{position:fixed;inset:0;background:rgba(3,4,6,.65);z-index:40;display:none;backdrop-filter:blur(2px);}
+  .drawer-backdrop.open{display:block;}
+  .drawer{position:fixed;left:0;right:0;bottom:0;background:var(--surface);z-index:41;border:1px solid var(--border-strong);border-bottom:none;
+    border-radius:24px 24px 0 0;padding:16px 18px calc(18px + env(safe-area-inset-bottom));
+    transform:translateY(100%);transition:transform .22s ease;max-height:80vh;overflow:auto;}
+  .drawer.open{transform:translateY(0);}
+  .drawer-handle{width:38px;height:4px;background:var(--border-strong);border-radius:3px;margin:0 auto 14px;}
+  .drawer h3{margin:0 0 12px;font-size:15px;color:var(--ink);font-family:var(--font-display);}
+  .drawer-field{margin-bottom:14px;}
+  .drawer-field label{display:block;font-size:10px;color:var(--muted-dim);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;font-weight:700;font-family:var(--font-mono);}
+  .drawer-field select{width:100%;height:46px;border:1px solid var(--border-strong);border-radius:11px;padding:0 12px;font-size:14px;background:var(--surface-soft);color:var(--ink);font-family:var(--font-sans);}
+  .drawer-actions{display:flex;gap:10px;margin-top:6px;} .drawer-actions .btn{flex:1;justify-content:center;}
+
+  .mobile-bottombar{display:none;position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--header-bg);
+    border-top:1px solid var(--border);padding:10px 14px calc(10px + env(safe-area-inset-bottom));gap:8px;}
+  .mobile-bottombar .btn{flex:1;justify-content:center;font-size:12px;}
+
+  /* ---------- admin modal ---------- */
+  .modal-backdrop{position:fixed;inset:0;background:rgba(3,4,6,.7);z-index:50;display:none;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(3px);}
+  .modal-backdrop.open{display:flex;}
+  .modal{background:var(--surface);border:1px solid var(--border-strong);border-radius:22px;padding:24px;max-width:340px;width:100%;}
+  .modal h3{margin:0 0 6px;font-size:16px;color:var(--ink);font-family:var(--font-display);}
+  .modal p{margin:0 0 16px;font-size:12.6px;color:var(--muted);line-height:1.6;}
+  .modal input{width:100%;height:46px;border:1px solid var(--border-strong);border-radius:11px;padding:0 12px;
+    font-size:14px;margin-bottom:10px;font-family:var(--font-sans);background:var(--surface-soft);color:var(--ink);}
+  .modal input:focus{outline:none;border-color:var(--emerald);}
+  .modal-actions{display:flex;gap:8px;margin-top:6px;} .modal-actions .btn{flex:1;justify-content:center;}
+  .modal-error{color:var(--danger);font-size:11.8px;margin:-4px 0 10px;display:none;}
+
+  .admin-footer-link{text-align:center;margin-top:28px;}
+
+  @media (max-width:760px){
+    .wrap{padding:14px 14px 90px;}
+    .top{flex-direction:column;align-items:stretch;gap:10px;}
+    .file-actions{display:none;}
+    .dropzone{padding:44px 16px;margin-top:14px;}
+    .stats{grid-template-columns:repeat(2,1fr);gap:8px;}
+    .stat{padding:10px 12px;} .stat .num{font-size:18px;}
+    .toolbar{padding:10px;} .toolbar select.filt{display:none;} .toolbar .clear-link{display:none;}
+    .filter-trigger{display:inline-flex;align-items:center;gap:6px;height:var(--tap);padding:0 14px;border-radius:11px;
+      border:1px solid var(--border-strong);background:var(--surface-soft);font-size:13px;font-weight:600;color:var(--ink-soft);white-space:nowrap;font-family:var(--font-sans);}
+    .mobile-bottombar{display:flex;}
+  }
+  @media (min-width:761px){ .drawer, .drawer-backdrop{display:none !important;} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="status-strip">
+    <span class="status-item live hidden" id="liveStatusItem">
+      <span class="pulse-dot"></span>Live
+    </span>
+    <span class="status-item offline hidden" id="offlineStatusItem">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01M10.3 3.9l-8 14A2 2 0 004 21h16a2 2 0 001.7-3.1l-8-14a2 2 0 00-3.4 0z" stroke-linejoin="round"/></svg>
+      Offline — showing last saved
+      <button class="status-mini-btn" id="retryConnBtn">Retry</button>
+    </span>
+    <span class="status-divider hidden" id="statusDivider1"></span>
+    <span class="status-item admin hidden" id="adminStatusItem">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l8 4v6c0 5-3.4 8-8 10-4.6-2-8-5-8-10V6l8-4z" stroke-linejoin="round"/></svg>
+      Admin mode
+      <button class="status-mini-btn" id="signOutBtn">Sign out</button>
+    </span>
+    <span class="status-divider hidden" id="statusDivider2"></span>
+    <span class="status-item install hidden" id="installStatusItem">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 4v10m0 0l-3.5-3.5M12 14l3.5-3.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 17v2a2 2 0 002 2h10a2 2 0 002-2v-2" stroke-linecap="round"/></svg>
+      <button class="status-mini-btn accent" id="installBtn">Install app</button>
+      <button class="status-mini-btn plain" id="dismissInstall">✕</button>
+    </span>
+  </div>
+
+  <div class="top">
+    <div class="brand">
+      <div class="brand-mark">RA</div>
+      <div>
+        <h1>Room Console<span class="brand-badge">LIVE OPS</span></h1>
+        <p>Faculty &amp; room allocation — shared, live, always current.</p>
+      </div>
+    </div>
+    <div class="file-actions" id="fileActionsTop"></div>
+  </div>
+
+  <div id="emptyState" class="empty-state hidden">
+    <div class="empty-icon">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 8v4l3 3" stroke-linecap="round"/><circle cx="12" cy="12" r="9"/></svg>
+    </div>
+    <h2>No schedule has been shared yet</h2>
+    <p>Once an admin uploads a file, everyone with this link (or the installed app) will see it here automatically.</p>
+  </div>
+
+  <div id="dropzone" class="dropzone hidden">
+    <div class="dz-icon">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+        <path d="M12 16V4M12 4l-4 4M12 4l4 4" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M4 16v3a2 2 0 002 2h12a2 2 0 002-2v-3" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <h2>Publish this week's schedule</h2>
+    <p>Accepts .xlsx files with the same columns as the room allocation sheet.<br>This replaces what everyone else currently sees.</p>
+    <button class="btn btn-accent" id="pickFileBtn">Choose Excel file</button>
+    <div class="dz-hint">READ LOCALLY · PUBLISHED TO SHARED STORE</div>
+  </div>
+
+  <input type="file" id="fileInput" accept=".xlsx,.xls">
+
+  <div id="app" class="hidden">
+    <div class="stats" id="stats"></div>
+
+    <div class="toolbar">
+      <div class="search-box">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3" stroke-linecap="round"/></svg>
+        <input type="text" id="searchInput" placeholder="Search course, faculty, moderator, subject code…">
+      </div>
+      <button class="filter-trigger" id="openDrawerBtn">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M7 12h10M10 18h4" stroke-linecap="round"/></svg>
+        Filters <span id="activeDot"></span>
+      </button>
+      <select class="filt" id="filterDay"><option value="">All days</option></select>
+      <select class="filt" id="filterProgram"><option value="">All programs</option></select>
+      <select class="filt" id="filterSem"><option value="">All semesters</option></select>
+      <select class="filt" id="filterFaculty"><option value="">All faculty</option></select>
+      <select class="filt" id="filterRoom">
+        <option value="">All rooms</option>
+        <option value="assigned">Room assigned</option>
+        <option value="missing">Room missing</option>
+      </select>
+      <select class="filt" id="sortSelect">
+        <option value="COURSE NAME">Sort: Course name</option>
+        <option value="Day">Sort: Day</option>
+        <option value="Time">Sort: Time</option>
+        <option value="Faculty">Sort: Faculty</option>
+        <option value="Room allocation">Sort: Room</option>
+      </select>
+      <button class="clear-link" id="sortDirBtn" style="color:var(--ink-soft);" title="Toggle sort direction">A→Z</button>
+      <button class="clear-link" id="clearFilters">Clear filters</button>
+    </div>
+
+    <div class="cards" id="cardsView"></div>
+
+    <div class="footer-row">
+      <span id="rowCountLabel"></span>
+      <span id="editHint"></span>
+    </div>
+  </div>
+
+  <div class="admin-footer-link">
+    <button class="btn-text" id="adminToggleLink">Admin sign-in</button>
+  </div>
+</div>
+
+<div class="drawer-backdrop" id="drawerBackdrop"></div>
+<div class="drawer" id="filterDrawer">
+  <div class="drawer-handle"></div>
+  <h3>Filter sessions</h3>
+  <div class="drawer-field"><label>Day</label><select id="filterDayM"></select></div>
+  <div class="drawer-field"><label>Program</label><select id="filterProgramM"></select></div>
+  <div class="drawer-field"><label>Faculty</label><select id="filterFacultyM"></select></div>
+  <div class="drawer-field"><label>Semester</label><select id="filterSemM"></select></div>
+  <div class="drawer-field"><label>Room status</label>
+    <select id="filterRoomM"><option value="">All rooms</option><option value="assigned">Room assigned</option><option value="missing">Room missing</option></select>
+  </div>
+  <div class="drawer-actions">
+    <button class="btn btn-ghost" id="drawerClear">Clear all</button>
+    <button class="btn btn-accent" id="drawerApply">Apply filters</button>
+  </div>
+</div>
+
+<div class="mobile-bottombar hidden" id="mobileBottombar">
+  <button class="btn btn-ghost hidden" id="replaceBtnMobile">Upload new</button>
+  <button class="btn btn-danger-outline hidden" id="clearBtnMobile">Clear data</button>
+  <button class="btn btn-accent" id="exportBtnMobile">Export</button>
+</div>
+
+<div class="modal-backdrop" id="adminModalBackdrop">
+  <div class="modal">
+    <h3>Admin sign-in</h3>
+    <p>Enter a GitHub Personal Access Token with write access to this repo, to upload, edit, or clear the live schedule.</p>
+    <input type="password" id="adminKeyInput" placeholder="GitHub token (ghp_... or github_pat_...)" autocomplete="off">
+    <div class="modal-error" id="adminError">Incorrect token. Try again.</div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="adminCancelBtn">Cancel</button>
+      <button class="btn btn-accent" id="adminSubmitBtn">Sign in</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// EDIT THESE THREE BEFORE DEPLOYING — see README.txt Step 3
+// ============================================================
+const GH_OWNER = 'your-github-username';
+const GH_REPO = 'your-repo-name';
+const GH_BRANCH = 'main';
+// ============================================================
+
+const GH_DATA_PATH = 'data/schedule.json';
+const STATIC_DATA_URL = './' + GH_DATA_PATH;          // what viewers read (fast, unlimited, ~1 min behind)
+const GH_API_BASE = 'https://api.github.com/repos/' + GH_OWNER + '/' + GH_REPO;
+const LOCAL_CACHE_KEY = 'room_console_cache_v1';
+const POLL_MS = 45000;
+
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+const app = document.getElementById('app');
+const emptyState = document.getElementById('emptyState');
+const fileActionsTop = document.getElementById('fileActionsTop');
+const mobileBottombar = document.getElementById('mobileBottombar');
+
+let HEADERS = [];
+let ROWS = [];
+let SORT = { col: 'COURSE NAME', dir: 1 };
+function ensureDefaultSort(){
+  if(!SORT.col || !HEADERS.includes(SORT.col)){
+    const preferred = ['COURSE NAME','Course Name','Course','Name'].find(c=> HEADERS.includes(c));
+    SORT.col = preferred || HEADERS[0] || null;
+    SORT.dir = 1;
+  }
+}
+let isAdmin = false;
+let adminKey = null;
+let lastKnownUpdatedAt = null;
+let saveTimer = null;
+
+const EDITABLE = ['Room allocation','Faculty','Moderator'];
+const LINK_COL = 'Feedback Links';
+const DAY_COL = 'Day';
+const PROGRAM_COL = 'PROGRAM';
+const SEM_COL = 'SEMESTER';
+const ROOM_COL = 'Room allocation';
+const FACULTY_COL = 'Faculty';
+let facultyAutoSelected = false;
+
+function getLS(){ try{ const t='__t__'; localStorage.setItem(t,'1'); localStorage.removeItem(t); return localStorage; }catch(e){ return null; } }
+const ls = getLS();
+function cacheLocally(payload){ if(ls){ try{ ls.setItem(LOCAL_CACHE_KEY, JSON.stringify(payload)); }catch(e){} } }
+function readLocalCache(){ if(!ls) return null; try{ return JSON.parse(ls.getItem(LOCAL_CACHE_KEY)); }catch(e){ return null; } }
+
+const ADMIN_KEY_STORAGE = 'room_console_admin_key_v1';
+function saveAdminKey(key){ if(ls){ try{ ls.setItem(ADMIN_KEY_STORAGE, key); }catch(e){} } }
+function readAdminKey(){ if(!ls) return null; try{ return ls.getItem(ADMIN_KEY_STORAGE); }catch(e){ return null; } }
+function clearAdminKey(){ if(ls){ try{ ls.removeItem(ADMIN_KEY_STORAGE); }catch(e){} } }
+
+async function fetchShared(){
+  try{
+    const res = await fetch(STATIC_DATA_URL + '?t=' + Date.now(), { cache: 'no-store' });
+    if(res.status === 404){
+      setBanner('live');
+      showEmpty();
+      return;
+    }
+    if(!res.ok) throw new Error('bad response');
+    const data = await res.json();
+    setBanner('live');
+    if(data && Array.isArray(data.headers) && Array.isArray(data.rows) && data.rows.length){
+      cacheLocally(data);
+      if(data.updatedAt !== lastKnownUpdatedAt){
+        lastKnownUpdatedAt = data.updatedAt;
+        HEADERS = data.headers; ROWS = data.rows.map((r,i)=> ({...r, __id: r.__id ?? i}));
+        renderAll();
+      }
+      showApp();
+    } else {
+      showEmpty();
+    }
+  }catch(err){
+    const cached = readLocalCache();
+    if(cached && cached.rows && cached.rows.length){
+      HEADERS = cached.headers; ROWS = cached.rows.map((r,i)=> ({...r, __id: r.__id ?? i}));
+      lastKnownUpdatedAt = cached.updatedAt;
+      renderAll();
+      showApp();
+    } else {
+      showEmpty();
+    }
+    setBanner('offline');
+  }
+}
+
+function setAdminStatusVisible(visible){
+  document.getElementById('adminStatusItem').classList.toggle('hidden', !visible);
+  document.getElementById('statusDivider1').classList.toggle('hidden', !visible);
+}
+
+function setBanner(mode){
+  document.getElementById('liveStatusItem').classList.toggle('hidden', mode!=='live');
+  document.getElementById('offlineStatusItem').classList.toggle('hidden', mode!=='offline');
+}
+
+function showApp(){
+  emptyState.classList.add('hidden');
+  dropzone.classList.toggle('hidden', !isAdmin);
+  app.classList.remove('hidden');
+  mobileBottombar.classList.remove('hidden');
+}
+function showEmpty(){
+  app.classList.add('hidden');
+  mobileBottombar.classList.toggle('hidden', !isAdmin);
+  if(isAdmin){
+    emptyState.classList.add('hidden');
+    dropzone.classList.remove('hidden');
+  } else {
+    dropzone.classList.add('hidden');
+    emptyState.classList.remove('hidden');
+  }
+}
+
+function renderAll(){
+  ensureDefaultSort();
+  renderFileActions();
+  renderFilters();
+  renderStats();
+  syncSortControl();
+  renderCards();
+}
+
+function syncSortControl(){
+  const sel = document.getElementById('sortSelect');
+  if(sel && SORT.col && [...sel.options].some(o=>o.value===SORT.col)) sel.value = SORT.col;
+  const dirBtn = document.getElementById('sortDirBtn');
+  if(dirBtn) dirBtn.textContent = SORT.dir === 1 ? 'A→Z' : 'Z→A';
+}
+
+const adminModal = document.getElementById('adminModalBackdrop');
+document.getElementById('adminToggleLink').addEventListener('click', ()=>{
+  if(isAdmin){ signOut(); return; }
+  document.getElementById('adminKeyInput').value = '';
+  document.getElementById('adminError').style.display = 'none';
+  adminModal.classList.add('open');
+  setTimeout(()=> document.getElementById('adminKeyInput').focus(), 50);
+});
+document.getElementById('adminCancelBtn').addEventListener('click', ()=> adminModal.classList.remove('open'));
+document.getElementById('adminSubmitBtn').addEventListener('click', ()=> trySignIn(document.getElementById('adminKeyInput').value));
+document.getElementById('adminKeyInput').addEventListener('keydown', e=>{ if(e.key==='Enter') trySignIn(document.getElementById('adminKeyInput').value); });
+
+async function trySignIn(key, { silent } = {}){
+  if(!key){ return false; }
+  try{
+    const res = await fetch(GH_API_BASE, {
+      headers: { 'Authorization': 'token ' + key, 'Accept': 'application/vnd.github+json' }
+    });
+    if(res.status === 401){
+      if(!silent){
+        document.getElementById('adminError').textContent = 'That token was rejected by GitHub. Check it was copied correctly and hasn\'t expired.';
+        document.getElementById('adminError').style.display = 'block';
+      }
+      clearAdminKey();
+      return false;
+    }
+    if(res.status === 404){
+      if(!silent){
+        document.getElementById('adminError').textContent = `GitHub says "${GH_OWNER}/${GH_REPO}" doesn't exist or this token can't see it. Check GH_OWNER/GH_REPO at the top of index.html, and that the token's repository access includes this repo.`;
+        document.getElementById('adminError').style.display = 'block';
+      }
+      clearAdminKey();
+      return false;
+    }
+    if(!res.ok){
+      throw new Error(`GitHub returned ${res.status}`);
+    }
+    const repoInfo = await res.json();
+    if(!repoInfo.permissions || !repoInfo.permissions.push){
+      if(!silent){
+        document.getElementById('adminError').textContent = "This token doesn't have write access to the repo. It needs Contents: Read and write permission.";
+        document.getElementById('adminError').style.display = 'block';
+      }
+      clearAdminKey();
+      return false;
+    }
+    adminKey = key;
+    isAdmin = true;
+    saveAdminKey(key);
+    setAdminStatusVisible(true);
+    document.getElementById('adminToggleLink').textContent = 'Signed in as admin';
+    if(!silent) adminModal.classList.remove('open');
+    await fetchShared();
+    renderAll();
+    return true;
+  }catch(err){
+    if(!silent){
+      const isNetworkErr = err instanceof TypeError;
+      document.getElementById('adminError').textContent = isNetworkErr
+        ? "Couldn't reach GitHub — check your internet connection and try again."
+        : `Sign-in failed: ${err.message}`;
+      document.getElementById('adminError').style.display = 'block';
+    }
+    return false;
+  }
+}
+
+function signOut(){
+  isAdmin = false; adminKey = null;
+  clearAdminKey();
+  setAdminStatusVisible(false);
+  document.getElementById('adminToggleLink').textContent = 'Admin sign-in';
+  if(ROWS.length){ showApp(); } else { showEmpty(); }
+  renderAll();
+}
+document.getElementById('signOutBtn').addEventListener('click', signOut);
+
+function stripId(r){ const { __id, ...rest } = r; return rest; }
+
+function b64EncodeUnicode(str){
+  return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (match, p1) => String.fromCharCode('0x' + p1)));
+}
+
+async function getCurrentFileSha(){
+  const res = await fetch(GH_API_BASE + '/contents/' + GH_DATA_PATH + '?ref=' + GH_BRANCH, {
+    headers: { 'Authorization': 'token ' + adminKey, 'Accept': 'application/vnd.github+json' }
+  });
+  if(res.status === 404) return null;
+  if(res.status === 401){ const e = new Error('Unauthorized'); e.code = 401; throw e; }
+  if(!res.ok) throw new Error(`GitHub returned ${res.status} while checking the current file.`);
+  const json = await res.json();
+  return json.sha;
+}
+
+async function commitToGitHub(payload, message){
+  const sha = await getCurrentFileSha();
+  const content = b64EncodeUnicode(JSON.stringify(payload, null, 2));
+  const body = { message, content, branch: GH_BRANCH };
+  if(sha) body.sha = sha;
+  const res = await fetch(GH_API_BASE + '/contents/' + GH_DATA_PATH, {
+    method: 'PUT',
+    headers: { 'Authorization': 'token ' + adminKey, 'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  if(res.status === 401){ const e = new Error('Unauthorized'); e.code = 401; throw e; }
+  if(!res.ok){
+    let msg = `GitHub returned ${res.status}`;
+    try{ const errJson = await res.json(); if(errJson.message) msg = errJson.message; }catch(e){}
+    throw new Error(msg);
+  }
+  return res.json();
+}
+
+async function publish(){
+  if(!isAdmin) return;
+  const payload = { headers: HEADERS, rows: ROWS.map(stripId), updatedAt: Date.now() };
+  try{
+    await commitToGitHub(payload, 'Update room allocation schedule');
+    lastKnownUpdatedAt = payload.updatedAt;
+    cacheLocally(payload);
+  }catch(err){
+    if(err && err.code === 401){ alert('Your admin session is no longer valid. Please sign in again.'); signOut(); return; }
+    alert("Couldn't publish your change to GitHub — " + (err.message || 'check your connection') + ". It hasn't gone live for others yet. Note: other viewers also take about a minute to see any change, since GitHub Pages needs to rebuild.");
+  }
+}
+function schedulePublish(){ clearTimeout(saveTimer); saveTimer = setTimeout(publish, 700); }
+
+async function publishClear(){
+  if(!isAdmin) return;
+  const payload = { headers: [], rows: [], updatedAt: Date.now() };
+  try{
+    await commitToGitHub(payload, 'Clear shared room allocation schedule');
+    HEADERS = []; ROWS = []; lastKnownUpdatedAt = payload.updatedAt;
+    if(ls){ try{ ls.removeItem(LOCAL_CACHE_KEY); }catch(e){} }
+    showEmpty();
+  }catch(err){
+    if(err && err.code === 401){ alert('Your admin session is no longer valid. Please sign in again.'); signOut(); return; }
+    alert("Couldn't clear the shared schedule on GitHub — " + (err.message || 'check your connection'));
+  }
+}
+
+document.getElementById('pickFileBtn').addEventListener('click', ()=> fileInput.click());
+fileInput.addEventListener('change', e => { if(e.target.files[0]) loadFile(e.target.files[0]); });
+['dragenter','dragover'].forEach(ev=> dropzone.addEventListener(ev, e=>{ e.preventDefault(); dropzone.classList.add('drag'); }));
+['dragleave','drop'].forEach(ev=> dropzone.addEventListener(ev, e=>{ e.preventDefault(); dropzone.classList.remove('drag'); }));
+dropzone.addEventListener('drop', e=>{ const f = e.dataTransfer.files[0]; if(f) loadFile(f); });
+
+function loadFile(file){
+  if(!isAdmin){ return; }
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    try{
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, {type:'array', cellDates:true});
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const json = XLSX.utils.sheet_to_json(sheet, {defval:''});
+      if(!json.length){ alert('This sheet looks empty.'); return; }
+      HEADERS = Object.keys(json[0]);
+      ROWS = json.map((r,i)=>{
+        const row = {...r}; row.__id = i;
+        if(row.Date instanceof Date) row.Date = row.Date.toLocaleDateString('en-GB', {day:'2-digit',month:'short',year:'numeric'});
+        return row;
+      });
+      await publish();
+      await fetchShared();
+      showApp();
+      renderAll();
+    }catch(err){
+      alert('Could not read that file. Make sure it is a valid .xlsx export.\n\n'+err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function renderFileActions(){
+  fileActionsTop.innerHTML = isAdmin ? `
+    <button class="btn btn-ghost" id="replaceBtn">Upload new file</button>
+    <button class="btn btn-danger-outline" id="clearBtn">Clear shared data</button>
+    <button class="btn btn-accent" id="exportBtn">Export Excel</button>
+  ` : `<button class="btn btn-ghost" id="exportBtn">Export Excel</button>`;
+  document.getElementById('replaceBtn')?.addEventListener('click', ()=> fileInput.click());
+  document.getElementById('clearBtn')?.addEventListener('click', ()=>{
+    if(confirm('Clear the shared schedule for everyone? This cannot be undone unless you have the original file.')) publishClear();
+  });
+  document.getElementById('exportBtn')?.addEventListener('click', exportExcel);
+
+  document.getElementById('replaceBtnMobile').classList.toggle('hidden', !isAdmin);
+  document.getElementById('clearBtnMobile').classList.toggle('hidden', !isAdmin);
+  document.getElementById('editHint').textContent = isAdmin ? 'Double-click any Room / Faculty / Moderator cell to edit and publish it.' : '';
+}
+document.getElementById('replaceBtnMobile').addEventListener('click', ()=> fileInput.click());
+document.getElementById('exportBtnMobile').addEventListener('click', exportExcel);
+document.getElementById('clearBtnMobile').addEventListener('click', ()=>{
+  if(confirm('Clear the shared schedule for everyone? This cannot be undone unless you have the original file.')) publishClear();
+});
+
+function uniqueVals(col){ return [...new Set(ROWS.map(r=>r[col]).filter(v=>v!==undefined && v!==''))].sort(); }
+
+function renderFilters(){
+  const pairs = [
+    [document.getElementById('filterDay'), document.getElementById('filterDayM'), DAY_COL, v=>v],
+    [document.getElementById('filterProgram'), document.getElementById('filterProgramM'), PROGRAM_COL, v=>v],
+    [document.getElementById('filterSem'), document.getElementById('filterSemM'), SEM_COL, v=>'Semester '+v],
+    [document.getElementById('filterFaculty'), document.getElementById('filterFacultyM'), FACULTY_COL, v=>v],
+  ];
+  pairs.forEach(([d,m,col,labelFn])=>{
+    const dVal=d.value, mVal=m.value;
+    [d,m].forEach(el=> el.innerHTML = `<option value="">All</option>`);
+    if(HEADERS.includes(col)) uniqueVals(col).forEach(v=>{ d.add(new Option(labelFn(v),v)); m.add(new Option(labelFn(v),v)); });
+    d.value = dVal; m.value = mVal;
+  });
+
+  // Auto-select the first faculty (alphabetically) the very first time data loads,
+  // so the view starts scoped to one faculty rather than showing everyone at once.
+  if(!facultyAutoSelected && HEADERS.includes(FACULTY_COL)){
+    const names = uniqueVals(FACULTY_COL);
+    if(names.length){
+      document.getElementById('filterFaculty').value = names[0];
+      document.getElementById('filterFacultyM').value = names[0];
+      facultyAutoSelected = true;
+    }
+  }
+}
+
+function attachControlEventsOnce(){
+  document.getElementById('searchInput').oninput = renderCards;
+  document.getElementById('filterDay').onchange = renderCards;
+  document.getElementById('filterProgram').onchange = renderCards;
+  document.getElementById('filterSem').onchange = renderCards;
+  document.getElementById('filterFaculty').onchange = renderCards;
+  document.getElementById('filterRoom').onchange = renderCards;
+  document.getElementById('sortSelect').onchange = (e)=>{ SORT.col = e.target.value; renderCards(); };
+  document.getElementById('sortDirBtn').onclick = ()=>{
+    SORT.dir *= -1;
+    document.getElementById('sortDirBtn').textContent = SORT.dir === 1 ? 'A→Z' : 'Z→A';
+    renderCards();
+  };
+  document.getElementById('clearFilters').onclick = ()=>{
+    ['searchInput'].forEach(id=> document.getElementById(id).value='');
+    ['filterDay','filterProgram','filterSem','filterRoom','filterFaculty'].forEach(id=> document.getElementById(id).value='');
+    renderCards();
+  };
+  const drawer = document.getElementById('filterDrawer');
+  const backdrop = document.getElementById('drawerBackdrop');
+  document.getElementById('openDrawerBtn').onclick = ()=>{
+    document.getElementById('filterDayM').value = document.getElementById('filterDay').value;
+    document.getElementById('filterProgramM').value = document.getElementById('filterProgram').value;
+    document.getElementById('filterSemM').value = document.getElementById('filterSem').value;
+    document.getElementById('filterRoomM').value = document.getElementById('filterRoom').value;
+    document.getElementById('filterFacultyM').value = document.getElementById('filterFaculty').value;
+    drawer.classList.add('open'); backdrop.classList.add('open');
+  };
+  const closeDrawer = ()=>{ drawer.classList.remove('open'); backdrop.classList.remove('open'); };
+  backdrop.onclick = closeDrawer;
+  document.getElementById('drawerApply').onclick = ()=>{
+    document.getElementById('filterDay').value = document.getElementById('filterDayM').value;
+    document.getElementById('filterProgram').value = document.getElementById('filterProgramM').value;
+    document.getElementById('filterSem').value = document.getElementById('filterSemM').value;
+    document.getElementById('filterRoom').value = document.getElementById('filterRoomM').value;
+    document.getElementById('filterFaculty').value = document.getElementById('filterFacultyM').value;
+    closeDrawer(); renderCards();
+  };
+  document.getElementById('drawerClear').onclick = ()=>{
+    ['filterDayM','filterProgramM','filterSemM','filterRoomM','filterFacultyM'].forEach(id=> document.getElementById(id).value='');
+    ['filterDay','filterProgram','filterSem','filterRoom','filterFaculty'].forEach(id=> document.getElementById(id).value='');
+    document.getElementById('searchInput').value='';
+    closeDrawer(); renderCards();
+  };
+}
+attachControlEventsOnce();
+
+function updateActiveDot(){
+  const anyActive = ['filterDay','filterProgram','filterSem','filterRoom','filterFaculty'].some(id=> document.getElementById(id).value !== '');
+  document.getElementById('activeDot').innerHTML = anyActive ? '<span class="active-dot"></span>' : '';
+}
+
+function getFiltered(){
+  const q = document.getElementById('searchInput').value.trim().toLowerCase();
+  const day = document.getElementById('filterDay').value;
+  const prog = document.getElementById('filterProgram').value;
+  const sem = document.getElementById('filterSem').value;
+  const roomState = document.getElementById('filterRoom').value;
+  const faculty = document.getElementById('filterFaculty').value;
+  let rows = ROWS.filter(r=>{
+    if(day && String(r[DAY_COL]) !== day) return false;
+    if(prog && String(r[PROGRAM_COL]) !== prog) return false;
+    if(sem && String(r[SEM_COL]) !== sem) return false;
+    if(faculty && String(r[FACULTY_COL]) !== faculty) return false;
+    if(roomState){
+      const empty = !r[ROOM_COL] || String(r[ROOM_COL]).trim()==='';
+      if(roomState==='missing' && !empty) return false;
+      if(roomState==='assigned' && empty) return false;
+    }
+    if(q){ const hay = HEADERS.map(h=> String(r[h]||'')).join(' ').toLowerCase(); if(!hay.includes(q)) return false; }
+    return true;
+  });
+  if(SORT.col){
+    rows.sort((a,b)=>{
+      let av=a[SORT.col], bv=b[SORT.col];
+      const an=parseFloat(av), bn=parseFloat(bv);
+      if(!isNaN(an) && !isNaN(bn) && String(an)===String(av).trim() && String(bn)===String(bv).trim()) return (an-bn)*SORT.dir;
+      av=String(av||''); bv=String(bv||''); return av.localeCompare(bv)*SORT.dir;
+    });
+  }
+  return rows;
+}
+
+function renderStats(){
+  const total = ROWS.length;
+  const missing = HEADERS.includes(ROOM_COL) ? ROWS.filter(r=>!r[ROOM_COL] || String(r[ROOM_COL]).trim()==='').length : 0;
+  const programs = HEADERS.includes(PROGRAM_COL) ? new Set(ROWS.map(r=>r[PROGRAM_COL]).filter(Boolean)).size : 0;
+  const faculty = HEADERS.includes('Faculty') ? new Set(ROWS.map(r=>r['Faculty']).filter(Boolean)).size : 0;
+  const days = HEADERS.includes(DAY_COL) ? new Set(ROWS.map(r=>r[DAY_COL]).filter(Boolean)).size : 0;
+  document.getElementById('stats').innerHTML = `
+    <div class="stat"><div class="num">${total}</div><div class="lbl">Sessions</div></div>
+    <div class="stat ${missing>0?'warn':''}"><div class="num">${missing}</div><div class="lbl">Rooms missing</div></div>
+    <div class="stat"><div class="num">${programs}</div><div class="lbl">Programs</div></div>
+    <div class="stat"><div class="num">${faculty}</div><div class="lbl">Faculty</div></div>
+    <div class="stat"><div class="num">${days}</div><div class="lbl">Days</div></div>`;
+}
+
+function renderCards(){
+  updateActiveDot();
+  const rows = getFiltered();
+
+  const cardsView = document.getElementById('cardsView');
+  cardsView.innerHTML = rows.map(r=>{
+    const dayVal = r[DAY_COL];
+    const cardClass = dayVal==='Saturday' ? 'day-sat' : dayVal==='Sunday' ? 'day-sun' : '';
+    const roomVal = r[ROOM_COL] || '';
+    const linkVal = r[LINK_COL];
+    const hasLink = linkVal && String(linkVal).trim().startsWith('http');
+    const metaBits = [r[PROGRAM_COL], r.Specialization, r.BATCH ? 'Batch '+r.BATCH : '', r[SEM_COL] ? 'Sem '+r[SEM_COL] : ''].filter(Boolean).join(' · ');
+    const roomInputHtml = isAdmin
+      ? `<input type="text" value="${escapeAttr(roomVal)}" data-id="${r.__id}" data-col="${ROOM_COL}" placeholder="Not assigned">`
+      : `<span class="v">${roomVal ? escapeHtml(roomVal) : '<span class="empty-cell">Not assigned</span>'}</span>`;
+    return `
+    <div class="card ${cardClass}" data-id="${r.__id}">
+      <div class="card-top">
+        <div><div class="card-time">${escapeHtml(r.Time||'')} ${dayVal?('· '+escapeHtml(dayVal)):''}</div><div class="card-meta">${escapeHtml(metaBits)}</div></div>
+        ${roomVal ? '' : '<span class="chip warn">'+(isAdmin?'Assign room':'No room')+'</span>'}
+      </div>
+      <div class="card-course">${escapeHtml(r['COURSE NAME']||'')}</div>
+      <div class="card-code">${escapeHtml(r['SUBJECT CODE']||'')} · Session ${escapeHtml(r['Session No.']||'')}</div>
+      <div class="card-row"><span class="k">Room</span><div class="room-field">${roomInputHtml}</div></div>
+      <div class="card-row"><span class="k">Faculty</span><span class="v">${escapeHtml(r.Faculty||'—')}</span></div>
+      <div class="card-extra" id="extra-${r.__id}"><div class="card-row"><span class="k">Moderator</span><span class="v">${escapeHtml(r.Moderator||'—')}</span></div></div>
+      <div class="card-actions">
+        <button class="expand-btn" data-toggle="${r.__id}">More details</button>
+        ${hasLink ? `<a class="linkbtn" href="${escapeAttr(linkVal)}" target="_blank" rel="noopener">Feedback form &#8599;</a>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+  cardsView.querySelectorAll('input[data-col]').forEach(inp=> inp.addEventListener('change', onCellEdit));
+  cardsView.querySelectorAll('[data-toggle]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const el = document.getElementById('extra-'+btn.dataset.toggle);
+      el.classList.toggle('open');
+      btn.textContent = el.classList.contains('open') ? 'Less details' : 'More details';
+    });
+  });
+
+  document.getElementById('rowCountLabel').textContent = `${rows.length} / ${ROWS.length} SESSIONS`;
+}
+
+function onCellEdit(e){
+  if(!isAdmin) return;
+  const el = e.target;
+  const id = parseInt(el.dataset.id);
+  const col = el.dataset.col;
+  const row = ROWS.find(r=>r.__id===id);
+  if(!row) return;
+  const text = (el.value !== undefined ? el.value : el.innerText).trim();
+  row[col] = text;
+  schedulePublish();
+  if(col===ROOM_COL){ renderStats(); renderCards(); }
+}
+
+function escapeHtml(v){ return String(v===undefined?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escapeAttr(v){ return escapeHtml(v).replace(/"/g,'&quot;'); }
+
+function exportExcel(){
+  const exportRows = ROWS.map(r=>{ const out={}; HEADERS.forEach(h=> out[h]=r[h]); return out; });
+  const wsheet = XLSX.utils.json_to_sheet(exportRows, {header: HEADERS});
+  wsheet['!cols'] = HEADERS.map(h=>({ wch: Math.min(Math.max(Math.max(h.length, ...exportRows.map(r=>String(r[h]||'').length))+2,10),40) }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, wsheet, 'Schedule');
+  XLSX.writeFile(wb, `room_allocation_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
+setInterval(fetchShared, POLL_MS);
+document.getElementById('retryConnBtn').addEventListener('click', fetchShared);
+
+(async function init(){
+  const storedKey = readAdminKey();
+  if(storedKey){
+    const ok = await trySignIn(storedKey, { silent: true });
+    if(!ok) await fetchShared();
+  } else {
+    await fetchShared();
+  }
+})();
+
+if ('serviceWorker' in navigator) window.addEventListener('load', ()=> navigator.serviceWorker.register('service-worker.js').catch(()=>{}));
+let deferredInstallPrompt = null, installDismissed = false;
+const installStatusItem = document.getElementById('installStatusItem');
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault(); deferredInstallPrompt = e;
+  if(!installDismissed){
+    installStatusItem.classList.remove('hidden');
+    document.getElementById('statusDivider2').classList.remove('hidden');
+  }
+});
+document.getElementById('installBtn')?.addEventListener('click', async () => {
+  installStatusItem.classList.add('hidden');
+  document.getElementById('statusDivider2').classList.add('hidden');
+  if (deferredInstallPrompt){ deferredInstallPrompt.prompt(); await deferredInstallPrompt.userChoice; deferredInstallPrompt=null; }
+});
+document.getElementById('dismissInstall')?.addEventListener('click', () => {
+  installStatusItem.classList.add('hidden');
+  document.getElementById('statusDivider2').classList.add('hidden');
+  installDismissed = true;
+});
+</script>
+</body>
+</html>
